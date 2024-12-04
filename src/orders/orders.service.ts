@@ -5,7 +5,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { ChangeOrderStatusDto } from './dto/change-order-status.dto';
 import { PRODUCT_SERVICE } from 'src/config/services';
-import { firstValueFrom, throwError } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
@@ -23,7 +23,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
   async create(createOrderDto: CreateOrderDto) {
     try {
       const productsId = createOrderDto.items.map( item => item.productId )
-      const products = await firstValueFrom(this.productsClient.send({ cmd: 'validate_products' }, productsId))
+      const products = await firstValueFrom(this.productsClient.send({ cmd: 'validate_products' }, productsId)) // Obtengo los productos asociados a esos ids
 
       // Monto Total de los productos
       const totalAmount = createOrderDto.items.reduce((acc, orderItem) => {
@@ -68,7 +68,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
         ...order,
         OrderItem: order.OrderItem.map((orderItem) => ({
           ...orderItem,
-          name: products.find(product => product.id === orderItem.productId).name
+          name: products.find(product => product.id === orderItem.productId).name// Como son BD distintas, se hace esto
         }))
       };
 
@@ -108,7 +108,16 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
   async findOne(id: string) {
     const order = await this.order.findFirst({
-      where: { id }
+      where: { id },
+      include: {
+        OrderItem: {
+          select: {
+            productId: true,
+            quantity: true,
+            price: true
+          }
+        }
+      }
     })
 
     if(!order) {
@@ -118,7 +127,17 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
       })
     }
 
-    return order;
+
+    const products = await firstValueFrom(this.productsClient.send({ cmd: 'validate_products' }, order.OrderItem.map(orderItem => orderItem.productId)));
+
+
+    return {
+      ...order,
+      OrderItem: order.OrderItem.map(orderItem => ({
+        ...orderItem,
+        name: products.find(product => product.id === orderItem.productId).name
+      }))
+    };
   }
 
   async changeOrderStatus(changeOrderStatusDto: ChangeOrderStatusDto) {
