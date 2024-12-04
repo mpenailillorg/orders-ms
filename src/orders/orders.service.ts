@@ -1,9 +1,9 @@
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
 import { PrismaClient } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
+import { ChangeOrderStatusDto } from './dto/change-order-status.dto';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
@@ -61,11 +61,28 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
     return order;
   }
 
-  update(id: number, updateOrderDto: UpdateOrderDto) {
-    return `This action updates a #${id} order`;
-  }
+  async changeOrderStatus(changeOrderStatusDto: ChangeOrderStatusDto) {
+    
+    try {
+      const order = await this.findOne(changeOrderStatusDto.id);
 
-  remove(id: number) {
-    return `This action removes a #${id} order`;
+      if(order.status === changeOrderStatusDto.status) {
+        return order;
+      }
+
+      return this.order.update({
+        where: { id: changeOrderStatusDto.id },
+        data: {
+          status: changeOrderStatusDto.status
+        }
+      })
+
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: `Error to update the order with id ${ changeOrderStatusDto?.id} to ${ changeOrderStatusDto?.status } `
+      })
+    }
+
   }
 }
